@@ -1,0 +1,153 @@
+---
+title: "Tuesday_25_5"
+author: "Helena"
+date: "5/25/2021"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: paper
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidytuesdayR)
+library(tidyverse)
+library(bbplot)
+library(tufte)
+library(ggpomological)
+library(hrbrthemes)
+```
+
+## Loading the data
+The simplest way is to use the ‘tt_load()’ function. This function accepts two types of inputs to determine which data to grab. It can be a date as a string in the YYYY-MM-DD format like below.
+
+```{r read_data, include=TRUE}
+data=tt_load("2021-05-25") 
+drivers = data$drivers
+records = data$records
+# alternatively tt_data <- tt_load(2019, week=3)
+
+readme(data) # to understand the data set
+```
+
+```{r explore, include = FALSE}
+
+summary(drivers)
+summary(records)
+max(records$time)
+
+```
+
+## Some questions to explore
+
+- How did the world records develop over time?
+- Which track is the fastest?
+- For which track did the world record improve the most?
+- For how many tracks have shortcuts been discovered?
+- When were shortcuts discovered?
+- On which track does the shortcut save the most time?
+- Which is the longest standing world record?
+- Who is the player with the most world records?
+- Who are recent players?
+
+<center>**My aim today is to explore some new ggplot themes**</center>
+
+-  bbplot package
+- tvthemes package
+-  ggpomological 
+
+```{r cool_themes}
+#devtools::install_github("gadenbuie/ggpomological") 
+#devtools::install_github('bbc/bbplot')
+#remotes::install_github("hrbrmstr/hrbrthemes")
+#devtools::install_github("Ryo-N7/tvthemes")
+```
+### How did the records develop over time & bbplot
+```{r q1}
+# time_period (y), date (x), grid by type
+records_over_time<-ggplot(aes(x=date, y=time), data=records)+
+   geom_jitter(size=0.5)+
+   facet_wrap(vars(type))+
+   bbc_style()
+
+#bbplot::finalise_plot(plot_name = records_over_time,
+#source = "Source: TidyTuesday",
+#save_filepath = "21_05_25/images/records_over_time.png",
+#width_pixels = 640,
+#height_pixels = 550) # doesn't work
+
+```
+### Which track is the fastest?
+```{r q2}
+
+summary<-records %>% group_by(track, type) %>%
+   summarise(mean=mean(time), min=min(time)) 
+
+fastest_track<-summary %>%
+   filter(min==min(summary$min))
+fastest_average<-summary %>%
+   filter(mean==min(summary$mean))
+
+
+```
+The fastest record is in the  `r fastest_track$track `, `r fastest_track$type` track. The record is currently at `r fastest_track$min` s. The average record time between `r min(records$date)` and `r max(records$date)` was on the `r fastest_average$track`, `r fastest_average$type` at `r fastest_average$time`.
+
+### For which track did the world record improve the most?
+
+```{r improvement}
+
+summary_imp<-records%>%group_by(track, type)%>%
+   summarise(min=min(time), max=max(time), dif=max-min,mean=mean(time), relative =dif/max )
+
+max_improve <- summary_imp %>%
+   filter(dif == max(summary_imp$dif))
+max_rel_improve<-summary_imp %>%
+   filter(relative==max(summary_imp$relative))
+```
+
+The highest absolute improvement was by `r max_improve$time` in the `r max_improve$track`, `r max_improve$type`. However the biggest relative improvement was in the `r max_rel_improve$track`, `r max_improve_rel$type`, this improvement was `r max_rel_improve$time`, which is `r max_rel_improvement$relative * 100 ` % of the original time.
+
+###  On which track does the shortcut save the most time?
+
+```{r shortcuts}
+
+summary_shortcut<-records %>%
+   group_by(track, shortcut)%>%
+   summarise(n=n())
+track_shortcut<-records %>%
+   filter(shortcut == "Yes") %>%
+   group_by(track) %>%
+   summarise(n=n()) %>%
+   nrow()
+
+track_all<-records %>%
+   group_by(track) %>%
+   summarise(n=n()) %>%
+   nrow()
+   
+```
+Shortcut has been discovered on `r track_shortcut` out of `r track_all` tracks.
+
+```{r shortcut by year, fig.width=10,fig.height=11}
+
+ggplot(data=summary_shortcut, aes(x=track, y=n, fill=shortcut))+
+   geom_col(position="dodge")+
+   theme_pomological_fancy()+
+   scale_fill_pomological()
+
+
+ggplot(data=summary_shortcut, aes(x=shortcut, y=n, fill= shortcut))+
+   geom_col(position="dodge")+
+    labs(x="track", y="count",
+       title="Shortcuts discovered",
+       subtitle="",
+       caption="by Helena Blackmore") +
+   ylim(0,150)+
+   theme_ipsum_ps()+
+   facet_wrap(~track, scales="free")+
+   scale_fill_ipsum()
+  
+```
+
