@@ -1,0 +1,315 @@
+---
+title: "Tuesday_25_5"
+subtitle: "MARIO"
+author: "Helena"
+date: "5/25/2021"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: paper
+    highlight: tango
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidytuesdayR)
+library(gridExtra)
+library(tidyverse)
+library(bbplot)
+library(tufte)
+library(ggpomological)
+library(hrbrthemes)
+library(kableExtra)
+
+
+library(wordcloud)
+
+library(RColorBrewer)
+
+library(wordcloud2)
+```
+
+## Loading the data
+The simplest way is to use the ‘tt_load()’ function. This function accepts two types of inputs to determine which data to grab. It can be a date as a string in the YYYY-MM-DD format like below.
+
+```{r read_data, include=TRUE}
+data=tt_load("2021-05-25") 
+drivers = data$drivers
+records = data$records
+# alternatively tt_data <- tt_load(2019, week=3)
+
+readme(data) # to understand the data set
+```
+
+```{r explore, include = FALSE}
+
+summary(drivers)
+summary(records)
+max(records$time)
+
+```
+
+## Some questions to explore
+
+- How did the world records develop over time?
+- Which track is the fastest?
+- For which track did the world record improve the most?
+- For how many tracks have shortcuts been discovered?
+- When were shortcuts discovered?
+- On which track does the shortcut save the most time?
+- Which is the longest standing world record?
+- Who is the player with the most world records?
+- Who are recent players?
+
+<center>**My aim today is to explore some new ggplot themes**</center>
+
+-  bbplot package: https://github.com/bbc/bbplot/
+- tvthemes package: https://ryo-n7.github.io/2019-05-16-introducing-tvthemes-package/
+-  ggpomological  : https://www.garrickadenbuie.com/project/ggpomological/
+
+```{r cool_themes_install}
+#devtools::install_github("gadenbuie/ggpomological") 
+#devtools::install_github('bbc/bbplot')
+#remotes::install_github("hrbrmstr/hrbrthemes")
+#devtools::install_github("Ryo-N7/tvthemes")
+```
+### How did the records develop over time & bbplot
+```{r q1}
+# time_period (y), date (x), grid by type
+records_over_time<-ggplot(aes(x=date, y=time), data=records)+
+   geom_jitter(size=0.5)+
+   facet_wrap(vars(type))+
+   bbc_style()
+
+records_over_time
+
+#bbplot::finalise_plot(plot_name = records_over_time,
+#source = "Source: TidyTuesday",
+#save_filepath = "21_05_25/images/records_over_time.png",
+#width_pixels = 640,
+#height_pixels = 550) # doesn't work
+
+```
+### Which track is the fastest?
+```{r q2}
+
+summary<-records %>% group_by(track, type) %>%
+   summarise(mean=mean(time), min=min(time)) 
+
+fastest_track<-summary %>%
+   filter(min==min(summary$min))
+fastest_average<-summary %>%
+   filter(mean==min(summary$mean))
+
+
+```
+The fastest record is in the  `r fastest_track$track `, `r fastest_track$type` track. The record is currently at `r fastest_track$min` s. The average record time between `r min(records$date)` and `r max(records$date)` was on the `r fastest_average$track`, `r fastest_average$type` at `r fastest_average$time`.
+
+### For which track did the world record improve the most?
+
+```{r improvement}
+
+summary_imp<-records%>%group_by(track, type)%>%
+   summarise(min=min(time), max=max(time), dif=max-min,mean=mean(time), relative =dif/max )
+
+max_improve <- summary_imp %>%
+   filter(dif == max(summary_imp$dif))
+max_rel_improve<-summary_imp %>%
+   filter(relative==max(summary_imp$relative))
+```
+
+The highest absolute improvement was by `r max_improve$dif` in the `r max_improve$track`, `r max_improve$type`. However the biggest relative improvement was in the `r max_rel_improve$track`, `r max_rel_improve$type`, this improvement was `r round( max_rel_improve$dif, 2) `, which is `r round(max_rel_improve$relative * 100, 1) ` % of the original time.
+
+###  On which track does the shortcut save the most time?
+
+```{r shortcuts}
+
+summary_shortcut<-records %>%
+   group_by(track, shortcut)%>%
+   summarise(n=n())
+track_shortcut<-records %>%
+   filter(shortcut == "Yes") %>%
+   group_by(track) %>%
+   summarise(n=n()) %>%
+   nrow()
+
+track_all<-records %>%
+   group_by(track) %>%
+   summarise(n=n()) %>%
+   nrow()
+
+track_list<-records%>%select(track)%>%
+   unique()
+   
+```
+Shortcut has been discovered on `r track_shortcut` out of `r track_all` tracks.
+
+```{r shortcut by year, fig.width=8,fig.height=11, fig.align='left'}
+
+
+ggplot(data=summary_shortcut, aes(x=track, y=n, fill=shortcut))+
+   geom_col(position="dodge")+
+     scale_x_discrete(labels = c(1:track_all))+
+   theme_ipsum_pub()+
+   scale_fill_viridis_d() #colorblind scale
+
+
+
+ggplot(data=summary_shortcut, aes(x=shortcut, y=n, fill= shortcut))+
+   geom_col(position="dodge")+
+    labs(x="track", y="count",
+       title="Shortcuts discovered",
+       subtitle="",
+       caption="by Helena Blackmore") +
+   ylim(0,150)+
+   theme_ipsum_ps()+
+   facet_wrap(~track, scales="free")+
+   scale_fill_ipsum()
+  
+```
+```{r}
+track_list%>% kable(align='l' )
+```
+
+
+###  When were shortcuts discovered?
+
+```{r shortcuts_date}
+
+records%>%
+   group_by(track)%>%
+   filter(shortcut=="Yes" & date==min(date))%>%
+   select(track,date) %>%
+  kableExtra::kable()
+
+```
+### On which track does the shortcut save the most time?
+
+```{r, eval=FALSE}
+# compare each track shortcut yes and shortcut no
+
+shortcuts_dif<-records %>%
+   group_by(track, shortcut, type)%>%
+   filter(time==min(time))%>%
+   select(track, type,shortcut,time)
+
+time_saved <- function(track) 
+{
+ a3 = shortcuts_dif%>%filter(track=="track", type=="Three Lap", shortcut=="Yes")
+ a1 = shortcuts_dif%>%filter(track=="track", type=="Single Lap", shortcut=="Yes")
+
+ b3 =shortcuts_dif%>%filter(track==track, type=="Three Lap", shortcut=="No")
+ b1 =shortcuts_dif%>%filter(track==track, type=="Single Lap", shortcut=="No")
+
+ c3=b3$time-a3$time
+ c1=b1$time-a1$time
+ print(c(c3,c1))
+ return(c(c3,c1))
+}
+
+time_saved(track="Rainbow Road")
+
+alltracks=unique(shortcuts_dif$track)
+
+for track in alltracks {
+   
+}
+
+```
+### Which is the longest standing world record?
+
+```{r longest record}
+
+longest_record<-records%>%
+   filter(record_duration==max(record_duration))
+
+longest_player<-drivers %>%
+   filter(player==longest_record$player, year==max(year)) %>%
+   select(position, total, nation)%>%
+   kable(col.names =c("current leader position","world records", "nation"),
+         caption="More about the longest record holder",
+         digits=2,
+         align="c")%>%
+   kable_styling(latex_options="striped",
+                 full_width = FALSE,
+                 position = "float_left"
+                 )
+```
+The duration ofthe longest world record was  `r longest_record$record_duration` days. Player `r longest_record$player` completed the `r longest_record$track`, `r longest_record$type` in `r  round(longest_record$time,2)` s on `r longest_record$system_played` on the `r longest_record$date`. 
+
+
+`r longest_player`
+
+###  Who is the player with the most world records?
+```{r}
+library(tvthemes)
+import_simpsons()         ## "Akbar" font
+import_theLastAirbender() ## "Slayer" font
+import_rickAndMorty()     ## "Get Schwifty" font
+import_roboto_condensed() ## "Roboto Condensed" Google Font import from hrbrthemes
+import_titillium_web()    ## "Titillium Web" Google Font import from hrbrthemes
+import_spongeBob()        ## "Some Time Later" font
+import_cinzel()           ## "Cinzel" font to use with 'The Palettes of Ice & Fire'
+
+#install.packages("extrafont")
+library(extrafont)
+loadfonts() ## You need to do this at the beginning of a session.
+```
+
+```{r}
+most_records<-drivers%>%
+   filter(total==max(total) & year==max(year))%>%
+   select(position, total, nation)%>%
+   kable(col.names =c("current leader position","world records", "nation"),
+         caption="More about the holder of most world records",
+         digits=2,
+         align="c")%>%
+   kable_styling(latex_options="striped",
+                 full_width = FALSE,
+                 position = "float_left"
+                 )
+
+top_drivers<-drivers%>%
+   filter(total>=50 )%>%
+   mutate(total = sort(total))
+
+top_drivers%>%
+  mutate(player = fct_reorder(player, total, .fun='median')) %>%
+  ggplot( aes(x=reorder(player, total), y=total))+
+   geom_point()+
+   labs(title = "Top Record Holders",
+       caption = glue::glue("
+                      TidyTuesday"),
+       x = "player name",
+       y = "no. of world records") +
+   theme_simpsons(title.font = "Akbar",
+                 text.font = "Akbar",
+                 axis.text.size = 6)+
+   scale_y_continuous(trans='pseudo_log')
+   
+```
+
+###  Who are recent players?
+
+```{r recent players}
+
+recent_players<-drivers%>%
+   filter(year>= 2015)%>%
+   group_by(player)%>%
+   summarise(n=n())
+
+
+```
+
+```{r wordcloud1, fig.align='left', fig.cap="Players active since 2015"}
+set.seed(1234) # for reproducibility 
+wordcloud(words = recent_players$player, freq = recent_players$n, min.freq = 1,           max.words=200, random.order=FALSE, rot.per=0.0001,colors=brewer.pal(8, "Dark2"), scale=c(0.9,0.25))
+```
+```{r wordcloud2, fig.align='right', fig.cap= "Players active from 2015"}
+wordcloud2(data=recent_players, size=0.1, color='random-dark')
+```
+
+
+
